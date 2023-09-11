@@ -1,30 +1,51 @@
-const http = require('http');
-const socketIo = require('socket.io');
+require("dotenv").config();
+const { io } = require("./server");
+const crypto = require("crypto");
 
-const LISTENER_PORT = 5002; // Port for the listener server
+io.on("connection", (socket) => {
+  console.log("Emitter connected");
+  socket.on("message", (encryptedMessage) => {
+    const passKey = process.env.passKey;
+    const iv = Buffer.from(process.env.iv, "hex");
 
-// Create a basic HTTP server
-const server = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Listener Server\n');
-});
+    const decipher = crypto.createDecipheriv(
+      "aes-256-ctr",
+      Buffer.from(passKey, "hex"),
+      iv
+    );
+    let decryptedMessage = decipher.update(encryptedMessage, "hex", "utf8");
+    decryptedMessage += decipher.final("utf8");
 
-const io = socketIo(server);
+    try {
+      const message = JSON.parse(decryptedMessage);
 
-io.on('connection', (socket) => {
-  console.log('Listener: A client has connected');
+      const secretKey = crypto
+        .createHash("sha256")
+        .update(
+          JSON.stringify({
+            name: message.name,
+            origin: message.origin,
+            destination: message.destination,
+          })
+        )
+        .digest("hex");
 
-  // Listen for data emitted by the emitter server
-  socket.on('emitterData', (data) => {
-    console.log('Listener: Received data from emitter:', data);
-    // Process and handle the received data as needed
+      if (secretKey === message.secretKey) {
+        console.log("Received Valid Data:", message);
+        const timestamp = new Date();
+        message.timestamp = timestamp;
+        messagesCollection.insertOne(message, (err, result) => {
+          if (err) {
+            console.error("Error inserting message into the database:", err);
+          } else {
+            console.log("Message inserted into the database:", result);
+          }
+        });
+      } else {
+        console.log("Invalid Data: Secret key mismatch");
+      }
+    } catch (error) {
+      console.error("Error processing data:", error.message);
+    }
   });
-
-  socket.on('disconnect', () => {
-    console.log('Listener: A client has disconnected');
-  });
-});
-
-server.listen(LISTENER_PORT, () => {
-  console.log(`Listener server is listening on port ${LISTENER_PORT}`);
 });

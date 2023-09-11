@@ -1,9 +1,13 @@
+require('dotenv').config();
 const crypto = require("crypto");
 const io = require("socket.io-client");
 const data = require("./data.json");
 
 const listenerServiceUrl = "http://localhost:5000";
 const socket = io(listenerServiceUrl);
+
+const passKey = process.env.passKey;
+const iv = Buffer.from(process.env.iv, 'hex'); 
 
 // Generate a random message
 const generateMessage = async () => {
@@ -31,11 +35,9 @@ const generateMessage = async () => {
 
 // Encrypt message using AES-256-CTR
 const encryptMessage = async (message) => {
-  const passkey = crypto.randomBytes(32).toString('hex'); 
-  const iv = await crypto.randomBytes(16);
   const cipher = await crypto.createCipheriv(
     "aes-256-ctr",
-    Buffer.from(passkey, "hex"),
+    Buffer.from(passKey, 'hex'),
     iv
   );
   const encryptedMessage =
@@ -44,8 +46,12 @@ const encryptMessage = async (message) => {
 };
 
 setInterval(async () => { 
-  const message = await generateMessage(); 
-  const encryptedMessage = await encryptMessage(message); 
-  socket.emit("message", encryptedMessage);
-  console.log("Message emitted:", message);
+  try {
+    const message = await generateMessage(); 
+    const encryptedMessage = await encryptMessage(message); 
+    socket.emit("message", encryptedMessage);
+    console.log("Message emitted:", message);
+  } catch (error) {
+    console.error("Error:", error);
+  }
 }, 10000);
