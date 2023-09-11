@@ -3,7 +3,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const http = require("http");
 const cors = require("cors");
-const socketIo = require('socket.io');
+const socketIo = require("socket.io");
 const crypto = require("crypto");
 
 const app = express();
@@ -43,6 +43,8 @@ const initializeAndConnect = async () => {
 
 initializeAndConnect();
 
+// Socket
+
 io.on("connection", (socket) => {
   console.log("Emitter connected");
   socket.on("message", (encryptedMessage) => {
@@ -80,6 +82,7 @@ io.on("connection", (socket) => {
             console.error("Error inserting message into the database:", err);
           } else {
             console.log("Message inserted into the database:", result);
+            io.emit("dataUpdate", message);            
           }
         });
       } else {
@@ -89,6 +92,17 @@ io.on("connection", (socket) => {
       console.error("Error processing data:", error.message);
     }
   });
+});
+
+// API frontend
+app.get("/timeseries", async (req, res) => {
+  try {
+    const timeSeriesData = await messagesCollection.find().toArray();
+    res.json(timeSeriesData);
+  } catch (error) {
+    console.error("Error fetching time-series data:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
 });
 
 module.exports = { db, messagesCollection, io, app };
